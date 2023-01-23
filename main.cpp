@@ -357,10 +357,10 @@ void lm35ReadingsArrayInit()
 
 void debounceButtonInit()
 {
-    if( enterButton ) {
-        enterButtonState = BUTTON_DOWN;
-    } else {
+    if( enterButton == 1) {
         enterButtonState = BUTTON_UP;
+    } else {
+        enterButtonState = BUTTON_DOWN;
     }
 }
 
@@ -370,7 +370,7 @@ bool debounceButtonUpdate()
     switch( enterButtonState ) {
 
     case BUTTON_UP:
-        if( enterButton ) {
+        if( enterButton == 0 ) {
             enterButtonState = BUTTON_FALLING;
             accumulatedDebounceButtonTime = 0;
         }
@@ -378,7 +378,7 @@ bool debounceButtonUpdate()
 
     case BUTTON_FALLING:
         if( accumulatedDebounceButtonTime >= DEBOUNCE_BUTTON_TIME_MS ) {
-            if( enterButton ) {
+            if( enterButton == 0 ) {
                 enterButtonState = BUTTON_DOWN;
             } else {
                 enterButtonState = BUTTON_UP;
@@ -389,7 +389,7 @@ bool debounceButtonUpdate()
         break;
 
     case BUTTON_DOWN:
-        if( !enterButton ) {
+        if( enterButton == 1 ) {
             enterButtonState = BUTTON_RISING;
             accumulatedDebounceButtonTime = 0;
         }
@@ -397,7 +397,7 @@ bool debounceButtonUpdate()
 
     case BUTTON_RISING:
         if( accumulatedDebounceButtonTime >= DEBOUNCE_BUTTON_TIME_MS ) {
-            if( !enterButton ) {
+            if( enterButton == 1 ) {
                 enterButtonState = BUTTON_UP;
                 enterButtonReleasedEvent = true;
             } else {
