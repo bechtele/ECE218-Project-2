@@ -3,9 +3,6 @@
 #include "mbed.h"
 #include "arm_book_lib.h"
 
-//=====[Defines pot]===============================================================
-//TESTING TESTING TESTING
-
 //=====[Defines potato]===============================================================
 
 
