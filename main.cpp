@@ -3,7 +3,7 @@
 #include "mbed.h"
 #include "arm_book_lib.h"
 
-//=====[Defines potato]===============================================================
+//=====[Defines pot]===============================================================
 
 #define NUMBER_OF_KEYS                           4
 #define BLINKING_TIME_GAS_ALARM               1000
