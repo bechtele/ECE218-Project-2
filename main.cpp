@@ -12,61 +12,32 @@
 
 //=====[Declaration and initialization of public global objects]===============
 
-DigitalIn enterButton(PB_15);
-DigitalIn alarmTestButton(BUTTON1);
-DigitalIn mq2(PE_12);
+DigitalIn ignitionButton(BUTTON1);
+DigitalIn driverSeatButton(D2);
 
-DigitalOut alarmLed(LED1);
-DigitalOut incorrectCodeLed(LED3);
-DigitalOut systemBlockedLed(LED2);
-DigitalOut outputRow4(PA_15);
+DigitalOut engineLed(LED2);
+DigitalOut leftHeadlight(D3);
+DigitalOut rightHeadlight(D4);
 
-DigitalInOut sirenPin(PE_10);
 
 UnbufferedSerial uartUsb(USBTX, USBRX, 115200);
 
-AnalogIn lm35(A1);  
+AnalogIn potentiometer(A0);  
+AnalogIn LDR(A1);
 
 //=====[Declaration and initialization of public global variables]=============
 
-bool alarmState    = OFF;
-bool incorrectCode = false;
-bool overTempDetector = OFF;
-
-int numberOfIncorrectCodes = 0;
-int buttonBeingCompared    = 0;
-int codeSequence[NUMBER_OF_KEYS]   = { 1, 1, 0, 0 };
-int accumulatedTimeAlarm = 0;
-
-bool gasDetectorState          = OFF;
-bool overTempDetectorState     = OFF;
-
-float potentiometerReading = 0.0;
-float lm35ReadingsAverage  = 0.0;
-float lm35ReadingsSum      = 0.0;
-float lm35ReadingsArray[NUMBER_OF_AVG_SAMPLES];
-float lm35TempC            = 0.0;
-
-int accumulatedDebounceButtonTime     = 0;
-int numberOfEnterButtonReleasedEvents = 0;
-buttonState_t enterButtonState;
 
 //=====[Declarations (prototypes) of public functions]=========================
 
 void inputsInit();
 void outputsInit();
 
-void alarmActivationUpdate();
-void alarmDeactivationUpdate();
+void engineupdate();
 
 void uartTask();
 void availableCommands();
-float celsiusToFahrenheit( float tempInCelsiusDegrees );
-float analogReadingScaledWithTheLM35Formula( float analogReading );
-void lm35ReadingsArrayInit();
 
-void debounceButtonInit();
-bool debounceButtonUpdate();
 
 //=====[Main function, the program entry point after power on or reset]========
 
@@ -86,104 +57,16 @@ int main()
 
 void inputsInit()
 {
-    lm35ReadingsArrayInit();
-    enterButton.mode(PullUp);
-    sirenPin.mode(OpenDrain);
-    sirenPin.input();
-    debounceButtonInit();
+    ignitionButton.mode(PullUp);
 }
 
 void outputsInit()
 {
-    alarmLed = OFF;
-    incorrectCodeLed = OFF;
-    systemBlockedLed = OFF;
-    outputRow4 = LOW;
+    engineLed = OFF;
+    leftHeadlight = OFF;
+    rightHeadlight = OFF;
 }
 
-void alarmActivationUpdate()
-{
-    static int lm35SampleIndex = 0;
-    int i = 0;
-
-    lm35ReadingsArray[lm35SampleIndex] = lm35.read();
-    lm35SampleIndex++;
-    if ( lm35SampleIndex >= NUMBER_OF_AVG_SAMPLES) {
-        lm35SampleIndex = 0;
-    }
-    
-    lm35ReadingsSum = 0.0;
-    for (i = 0; i < NUMBER_OF_AVG_SAMPLES; i++) {
-        lm35ReadingsSum = lm35ReadingsSum + lm35ReadingsArray[i];
-    }
-    lm35ReadingsAverage = lm35ReadingsSum / NUMBER_OF_AVG_SAMPLES;
-       lm35TempC = analogReadingScaledWithTheLM35Formula ( lm35ReadingsAverage );    
-    
-    if ( lm35TempC > OVER_TEMP_LEVEL ) {
-        overTempDetector = ON;
-    } else {
-        overTempDetector = OFF;
-    }
-
-    if( !mq2) {
-        gasDetectorState = ON;
-        alarmState = ON;
-    }
-    if( overTempDetector ) {
-        overTempDetectorState = ON;
-        alarmState = ON;
-    }
-    if( alarmTestButton ) {             
-        overTempDetectorState = ON;
-        gasDetectorState = ON;
-        alarmState = ON;
-    }
-    if( alarmState ) { 
-        accumulatedTimeAlarm = accumulatedTimeAlarm + TIME_INCREMENT_MS;
-        sirenPin.output();                                     
-        sirenPin = LOW;                                
-
-        if( gasDetectorState && overTempDetectorState ) {
-            if( accumulatedTimeAlarm >= BLINKING_TIME_GAS_AND_OVER_TEMP_ALARM ) {
-                accumulatedTimeAlarm = 0;
-                alarmLed = !alarmLed;
-            }
-        } else if( gasDetectorState ) {
-            if( accumulatedTimeAlarm >= BLINKING_TIME_GAS_ALARM ) {
-                accumulatedTimeAlarm = 0;
-                alarmLed = !alarmLed;
-            }
-        } else if ( overTempDetectorState ) {
-            if( accumulatedTimeAlarm >= BLINKING_TIME_OVER_TEMP_ALARM  ) {
-                accumulatedTimeAlarm = 0;
-                alarmLed = !alarmLed;
-            }
-        }
-    } else{
-        alarmLed = OFF;
-        gasDetectorState = OFF;
-        overTempDetectorState = OFF;
-        sirenPin.input();                                  
-    }
-}
-
-void alarmDeactivationUpdate()
-{
-    if ( numberOfIncorrectCodes < 5 ) {
-        bool enterButtonReleasedEvent = debounceButtonUpdate();
-        if( enterButtonReleasedEvent ) {
-            numberOfEnterButtonReleasedEvents++;
-            if( numberOfEnterButtonReleasedEvents >= 2 ) {
-                numberOfEnterButtonReleasedEvents = 0;
-                alarmState = OFF;
-                incorrectCodeLed = OFF;
-                numberOfIncorrectCodes = 0;
-            }
-        }
-    } else {
-        systemBlockedLed = ON;
-    }
-}
 
 void uartTask()
 {
@@ -323,81 +206,4 @@ void availableCommands()
     uartUsb.write( "Press '5' to enter a new code\r\n", 31 );
     uartUsb.write( "Press 'f' or 'F' to get lm35 reading in Fahrenheit\r\n", 52 );
     uartUsb.write( "Press 'c' or 'C' to get lm35 reading in Celsius\r\n\r\n", 51 );
-}
-
-float analogReadingScaledWithTheLM35Formula( float analogReading )
-{
-    return ( analogReading * 3.3 / 0.01 );
-}
-
-float celsiusToFahrenheit( float tempInCelsiusDegrees )
-{
-    return ( tempInCelsiusDegrees * 9.0 / 5.0 + 32.0 );
-}
-void lm35ReadingsArrayInit()
-{
-    int i;
-    for( i=0; i<NUMBER_OF_AVG_SAMPLES ; i++ ) {
-        lm35ReadingsArray[i] = 0;
-    }
-}
-
-void debounceButtonInit()
-{
-    if( enterButton == 1) {
-        enterButtonState = BUTTON_UP;
-    } else {
-        enterButtonState = BUTTON_DOWN;
-    }
-}
-
-bool debounceButtonUpdate()
-{
-    bool enterButtonReleasedEvent = false;
-    switch( enterButtonState ) {
-
-    case BUTTON_UP:
-        if( enterButton == 0 ) {
-            enterButtonState = BUTTON_FALLING;
-            accumulatedDebounceButtonTime = 0;
-        }
-        break;
-
-    case BUTTON_FALLING:
-        if( accumulatedDebounceButtonTime >= DEBOUNCE_BUTTON_TIME_MS ) {
-            if( enterButton == 0 ) {
-                enterButtonState = BUTTON_DOWN;
-            } else {
-                enterButtonState = BUTTON_UP;
-            }
-        }
-        accumulatedDebounceButtonTime = accumulatedDebounceButtonTime +
-                                        TIME_INCREMENT_MS;
-        break;
-
-    case BUTTON_DOWN:
-        if( enterButton == 1 ) {
-            enterButtonState = BUTTON_RISING;
-            accumulatedDebounceButtonTime = 0;
-        }
-        break;
-
-    case BUTTON_RISING:
-        if( accumulatedDebounceButtonTime >= DEBOUNCE_BUTTON_TIME_MS ) {
-            if( enterButton == 1 ) {
-                enterButtonState = BUTTON_UP;
-                enterButtonReleasedEvent = true;
-            } else {
-                enterButtonState = BUTTON_DOWN;
-            }
-        }
-        accumulatedDebounceButtonTime = accumulatedDebounceButtonTime +
-                                        TIME_INCREMENT_MS;
-        break;
-
-    default:
-        debounceButtonInit();
-        break;
-    }
-    return enterButtonReleasedEvent;
 }
