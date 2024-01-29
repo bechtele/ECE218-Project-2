@@ -2,13 +2,23 @@
 
 #include "mbed.h"
 #include "arm_book_lib.h"
+#include <cwchar>
 
 //=====[Defines potato]===============================================================
 
+#define HEADLAMP_ON_LEVEL 0.8
+#define HEADLAMP_OFF_LEVEL 0.2
+#define DAYLIGHT_LEVEL 0.6 //ADJUST!!
+#define DUSK_LEVEL 0.4 //ADJUST!!
 
 
 //=====[Declaration of public data types]======================================
 
+typedef enum {
+    WAIT, 
+    BUTTON_PRESSED, 
+    BUTTON_RELEASED
+} ignitionButtonState_t;
 
 //=====[Declaration and initialization of public global objects]===============
 
@@ -25,6 +35,8 @@ UnbufferedSerial uartUsb(USBTX, USBRX, 115200);
 AnalogIn potentiometer(A0);  
 AnalogIn LDR(A1);
 
+ignitionButtonState_t ignitionButtonState;
+
 //=====[Declaration and initialization of public global variables]=============
 
 
@@ -33,10 +45,13 @@ AnalogIn LDR(A1);
 void inputsInit();
 void outputsInit();
 
-void engineupdate();
+void engineUpdate();
+void headlightUpdate();
+bool engineButtonUpdate();
+bool driverSitting(); //Determine if the driver is seated
 
-void uartTask();
-void availableCommands();
+//void uartTask();
+//void availableCommands();
 
 
 //=====[Main function, the program entry point after power on or reset]========
@@ -46,10 +61,14 @@ int main()
     inputsInit();
     outputsInit();
     while (true) {
-        alarmActivationUpdate();
-        alarmDeactivationUpdate();
-        uartTask();
-        delay(TIME_INCREMENT_MS);
+        engineUpdate();
+        if(engineLed){
+            headlightUpdate();
+        }
+        else{
+            leftHeadlight = OFF;
+            rightHeadlight = OFF;
+        }
     }
 }
 
@@ -57,7 +76,9 @@ int main()
 
 void inputsInit()
 {
-    ignitionButton.mode(PullUp);
+    ignitionButton.mode(PullDown);
+    driverSeatButton.mode(PullDown);
+    ignitionButtonState = WAIT;
 }
 
 void outputsInit()
@@ -67,7 +88,106 @@ void outputsInit()
     rightHeadlight = OFF;
 }
 
+void engineUpdate(){ //NEEDS FIXING
 
+   if(engineButtonUpdate()){
+       engineLed = !engineLed;
+   }
+
+
+/*
+    if(!engineLed){
+        if(driverSeatButton && E()){
+            engineLed = ON;
+        }
+    }
+    else{
+        if(E()){
+            engineLed = OFF;
+        }
+    }
+    */
+}
+
+bool engineButtonUpdate(){ //NEEDS FIXING
+
+    switch(ignitionButtonState){
+        case WAIT : 
+            if(ignitionButton){
+                ignitionButtonState = BUTTON_PRESSED;
+            }
+
+        break;
+
+        case BUTTON_PRESSED :
+            if(!ignitionButton){
+                ignitionButtonState = BUTTON_RELEASED;
+            }
+
+        break;
+        
+        case BUTTON_RELEASED :
+            ignitionButtonState = WAIT;
+            return true;
+
+        break;
+    }
+
+/*
+    static bool buttonstatetracker = false;
+    //static bool buttonReleased = false;
+    if(buttonstatetracker && !ignitionButton){
+        buttonstatetracker = false;
+        return true;
+    }
+
+    if(ignitionButton){
+        buttonstatetracker = true;
+    }
+
+    return false;
+    */
+    
+    return false;
+}
+
+void headlightUpdate(){
+    float readP = potentiometer.read(); //headlights are turned on
+    if(readP >= HEADLAMP_ON_LEVEL){
+        leftHeadlight = ON;
+        rightHeadlight = ON;
+    }
+
+    if(readP <= HEADLAMP_OFF_LEVEL){ //headlights are turned off
+        leftHeadlight = OFF;
+        rightHeadlight = OFF;
+    }
+
+    else{ //Headlights are set to auto
+        float readLDR = LDR.read();//Get the analog signal from the LDR
+
+        if(readLDR >= DAYLIGHT_LEVEL){
+            delay(2000); //Wait 
+            leftHeadlight = OFF;
+            rightHeadlight = OFF;
+        }
+        if(readLDR <= DUSK_LEVEL){
+            delay(1000); //Wait
+            leftHeadlight = ON;
+            rightHeadlight = ON;
+        }
+    }
+}
+
+bool driverSeated(){
+if(driverSeatButton){
+    return true;
+}
+
+    return false;
+}
+
+/*
 void uartTask()
 {
     char receivedChar = '\0';
@@ -207,3 +327,5 @@ void availableCommands()
     uartUsb.write( "Press 'f' or 'F' to get lm35 reading in Fahrenheit\r\n", 52 );
     uartUsb.write( "Press 'c' or 'C' to get lm35 reading in Celsius\r\n\r\n", 51 );
 }
+
+*/
